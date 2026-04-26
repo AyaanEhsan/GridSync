@@ -14,6 +14,18 @@ class SearchRequest(BaseModel):
     k: int = Field(5, ge=1, le=50, description="Number of chunks to return.")
 
 
+class ChunkRelationship(BaseModel):
+    from_node: List[str] = Field(
+        default_factory=list,
+        description="Labels of the source node (the DocumentChunk).",
+    )
+    relationship: str = Field(..., description="Relationship type, e.g. MENTIONS.")
+    to_node: List[str] = Field(
+        default_factory=list,
+        description="Labels of the target node, e.g. ['Event'].",
+    )
+
+
 class Chunk(BaseModel):
     id: Any
     score: float
@@ -22,6 +34,10 @@ class Chunk(BaseModel):
     rerank_score: float
     text: Optional[str] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
+    relationships: List[ChunkRelationship] = Field(
+        default_factory=list,
+        description="Neo4j graph edges adjacent to this chunk (when file_id and chunk_no are present).",
+    )
 
 
 class SearchResponse(BaseModel):
@@ -43,19 +59,8 @@ class AgentChatResponse(BaseModel):
     tool_calls: List[AgentToolCall] = Field(default_factory=list)
 
 
-class ChunkRelationship(BaseModel):
-    from_node: List[str] = Field(
-        default_factory=list,
-        description="Labels of the source node (the DocumentChunk).",
-    )
-    relationship: str = Field(..., description="Relationship type, e.g. MENTIONS.")
-    to_node: List[str] = Field(
-        default_factory=list,
-        description="Labels of the target node, e.g. ['Event'].",
-    )
-
-
 class ChunkRelationshipsResponse(BaseModel):
     file_id: str
     chunk_num: str
     relationships: List[ChunkRelationship] = Field(default_factory=list)
+

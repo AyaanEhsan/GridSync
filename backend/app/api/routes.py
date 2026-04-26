@@ -43,6 +43,23 @@ def _get_neo4j_store():
     return Neo4jStore()
 
 
+def _relationships_for_file_chunk(
+    store: Any, file_id: str, chunk_num: str
+) -> list[ChunkRelationship]:
+    """Triples adjacent to a ``DocumentChunk`` for ``file_id`` + ``chunk_num``."""
+    triples = store.query_based_on_file_id_and_chunk_no(
+        file_id=file_id, chunk_num=chunk_num
+    )
+    return [
+        ChunkRelationship(
+            from_node=list(t.get("from_node") or []),
+            relationship=t["relationship"],
+            to_node=list(t.get("to_node") or []),
+        )
+        for t in triples
+    ]
+
+
 @router.post("/nerc-vector-search", response_model=SearchResponse, tags=["rag"])
 def nerc_vector_search(req: SearchRequest) -> SearchResponse:
     """Hybrid (dense + sparse) search over the Qdrant collection.
@@ -79,7 +96,25 @@ def nerc_vector_search(req: SearchRequest) -> SearchResponse:
                 metadata=payload,
             )
         )
-        
+
+    # After hybrid search + rerank, attach Neo4j edges for chunks that carry
+    # file_id + chunk_no in metadata (from ingestion).
+    try:
+        store = _get_neo4j_store()
+    except Exception:
+        store = None
+    for chunk in chunks:
+        file_id = chunk.metadata.get("file_id")
+        chunk_no = chunk.metadata.get("chunk_no")
+        if not file_id or chunk_no is None or store is None:
+            continue
+        try:
+            chunk.relationships = _relationships_for_file_chunk(
+                store, str(file_id), str(chunk_no)
+            )
+        except Exception:
+            continue
+
     return SearchResponse(query=req.query, chunks=chunks)
 
 
@@ -97,22 +132,12 @@ def chunk_relationships(file_id: str, chunk_num: str) -> ChunkRelationshipsRespo
     """
     try:
         store = _get_neo4j_store()
-        triples = store.query_based_on_file_id_and_chunk_no(
-            file_id=file_id, chunk_num=chunk_num
-        )
+        relationships = _relationships_for_file_chunk(store, file_id, chunk_num)
     except Exception as exc:
         raise HTTPException(
             status_code=500, detail=f"graph query failed: {exc}"
         ) from exc
 
-    relationships = [
-        ChunkRelationship(
-            from_node=list(t.get("from_node") or []),
-            relationship=t["relationship"],
-            to_node=list(t.get("to_node") or []),
-        )
-        for t in triples
-    ]
     return ChunkRelationshipsResponse(
         file_id=file_id, chunk_num=chunk_num, relationships=relationships
     )
