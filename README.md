@@ -37,7 +37,8 @@ pip install -r backend/requirements.txt
 Create `.env` in the project root:
 
 ```env
-OPENAI_API_KEY=your_key_here
+GEMINI_API_KEY=your_key_here
+
 QDRANT_URL=http://localhost:6333
 QDRANT_API_KEY=
 QDRANT_COLLECTION=nerc_event_analysis_reports
