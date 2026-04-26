@@ -62,21 +62,29 @@ class QdrantStore:
         dense_size: int,
         distance: models.Distance = models.Distance.COSINE,
     ) -> None:
-        """Create the hybrid collection if it doesn't exist yet."""
-        if self.exists():
-            return
-        self.client.create_collection(
+        """Create the hybrid collection (and required payload indexes) if they
+        don't exist yet."""
+        if not self.exists():
+            self.client.create_collection(
+                collection_name=self.collection,
+                vectors_config={
+                    DENSE_VECTOR_NAME: models.VectorParams(
+                        size=dense_size, distance=distance
+                    ),
+                },
+                sparse_vectors_config={
+                    SPARSE_VECTOR_NAME: models.SparseVectorParams(
+                        modifier=models.Modifier.IDF
+                    ),
+                },
+            )
+        # Keyword index on "filename" is required for filtered count/scroll.
+        # create_payload_index is idempotent — safe to call even if the index
+        # already exists.
+        self.client.create_payload_index(
             collection_name=self.collection,
-            vectors_config={
-                DENSE_VECTOR_NAME: models.VectorParams(
-                    size=dense_size, distance=distance
-                ),
-            },
-            sparse_vectors_config={
-                SPARSE_VECTOR_NAME: models.SparseVectorParams(
-                    modifier=models.Modifier.IDF
-                ),
-            },
+            field_name="filename",
+            field_schema=models.PayloadSchemaType.KEYWORD,
         )
 
     def info(self):
@@ -142,6 +150,38 @@ class QdrantStore:
         if points:
             self.client.upsert(collection_name=self.collection, points=points)
         return ids
+
+    # ----- existence check -------------------------------------------------------
+
+    def filename_exists(self, filename: str) -> bool:
+        """Return True if at least one point with the given ``filename`` payload
+        value already exists in the collection.
+
+        Used by the ingestion pipeline to skip PDFs that have already been
+        processed.
+        """
+        if not self.exists():
+            return False
+        # Ensure the keyword index exists — required by Qdrant cloud for
+        # filtered counts. Idempotent, so safe to call on every check.
+        self.client.create_payload_index(
+            collection_name=self.collection,
+            field_name="filename",
+            field_schema=models.PayloadSchemaType.KEYWORD,
+        )
+        result = self.client.count(
+            collection_name=self.collection,
+            count_filter=models.Filter(
+                must=[
+                    models.FieldCondition(
+                        key="filename",
+                        match=models.MatchValue(value=filename),
+                    )
+                ]
+            ),
+            exact=True,
+        )
+        return result.count > 0
 
     # ----- reads -----------------------------------------------------------------
 

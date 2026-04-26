@@ -23,7 +23,9 @@ from __future__ import annotations
 
 import argparse
 import sys
+import time
 import traceback
+from datetime import datetime
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -43,8 +45,9 @@ for _env in [_REPO_ROOT / ".env", Path(".env"), Path("../.env")]:
         load_dotenv(_env)
         break
 
-from gridsync import DenseEmbedder, SparseEmbedder, QdrantStore  # noqa: E402
-from pdf_pipeline import process_pdf                              # noqa: E402
+from gridsync import DenseEmbedder, SparseEmbedder, QdrantStore, Neo4jStore  # noqa: E402
+from pdf_pipeline import process_pdf                                          # noqa: E402
+from graph_pipeline import generate_nodes_and_relationships                   # noqa: E402
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -52,8 +55,8 @@ from pdf_pipeline import process_pdf                              # noqa: E402
 
 FOLDER_NAMES = [
     "ero-reliability-risk-priorities-reports",
-    # "event_analysis_reports",
-    # "state_of_reliability_reports",
+    "event_analysis_reports",
+    "state_of_reliability_reports",
 ]
 
 CANDIDATE_DATA_DIRS = [
@@ -88,8 +91,7 @@ def _collect_pdfs(data_dir: Path, folders: list[str], limit: int | None) -> list
             found = found[:limit]
         print(f"  {folder:45s} : {len(found)} PDF(s)")
         pdfs.extend(found)
-        # TODO: remove break
-        break
+
     return pdfs
 
 
@@ -112,6 +114,46 @@ def records_to_documents(records: list[dict]) -> list[Document]:
         )
         for r in records
     ]
+
+
+def push_documents_to_neo4j(
+    documents: list[Document],
+    graph: Neo4jStore,
+    gemini_model: str | None = None,
+    max_workers: int = 8,
+) -> tuple[int, int]:
+    """Extract entities/relationships from Documents and upsert them into Neo4j.
+
+    Steps
+    -----
+    1. Send each Document's text to Gemini to extract nodes and relationships.
+    2. Deduplicate across all chunks.
+    3. Upsert every node via ``Neo4jStore.create_node``.
+    4. Upsert every relationship via ``Neo4jStore.create_relationship``.
+
+    Returns
+    -------
+    tuple[int, int]
+        ``(nodes_upserted, relationships_upserted)``
+    """
+    if not documents:
+        return 0, 0
+
+    nodes, relationships = generate_nodes_and_relationships(
+        documents, model=gemini_model, max_workers=max_workers
+    )
+
+    for node in nodes:
+        graph.create_node(node["label"], node["properties"])
+
+    for rel in relationships:
+        graph.create_relationship(
+            rel["from_label"], rel["from_key_value"],
+            rel["to_label"],   rel["to_key_value"],
+            rel["rel_type"],   rel.get("properties"),
+        )
+
+    return len(nodes), len(relationships)
 
 
 def push_documents_to_qdrant(
@@ -214,16 +256,38 @@ def run_pipeline(
     dense_embedder  = DenseEmbedder()
     sparse_embedder = SparseEmbedder()
     store           = QdrantStore()
-    print(f"Connected to Qdrant collection: {store.collection}\n")
+    print(f"Connected to Qdrant collection: {store.collection}")
 
-    total_chunks = 0
+    print("Initialising Neo4j graph store...")
+    graph = Neo4jStore()
+    print("Connected to Neo4j.\n")
+
+    total_chunks      = 0
+    total_nodes       = 0
+    total_rels        = 0
     failed: list[str] = []
+
+    log_path = Path(__file__).parent / "ingestion.log"
+    log_file = log_path.open("a", encoding="utf-8")
+    log_file.write(
+        f"\n{'=' * 70}\n"
+        f"Run started : {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+        f"{'=' * 70}\n"
+    )
+    log_file.flush()
 
     for pdf_path in tqdm(pdf_paths, desc="PDFs processed", unit="file"):
         print(f"\n{'─' * 70}")
         print(f">>> {pdf_path.relative_to(data_dir)}")
+
+        if store.filename_exists(pdf_path.name):
+            print(f"  [SKIP] '{pdf_path.name}' already ingested — found in Qdrant.")
+            continue
+
+        pdf_start = time.monotonic()
         try:
             # Step 1 – PDF → vector-DB records
+            t0 = time.monotonic()
             records = process_pdf(
                 pdf_path,
                 min_body_chars=min_body_chars,
@@ -233,26 +297,73 @@ def run_pipeline(
                 gemini_model=gemini_model,
                 generate_context=generate_context,
             )
+            print(f"  [Step 1] PDF → records          : {time.monotonic() - t0:6.1f}s  ({len(records)} chunk(s))")
 
             # Step 2 – records → Document objects
+            t0 = time.monotonic()
             documents = records_to_documents(records)
+            print(f"  [Step 2] records → Documents    : {time.monotonic() - t0:6.1f}s  ({len(documents)} doc(s))")
 
             # Step 3 – embed + upsert to Qdrant
+            t0 = time.monotonic()
             ids = push_documents_to_qdrant(
                 documents, store, dense_embedder, sparse_embedder
             )
+            print(f"  [Step 3] Qdrant upsert          : {time.monotonic() - t0:6.1f}s  ({len(ids)} point(s) upserted)")
 
+            # Step 4 – extract entities/relationships and upsert to Neo4j
+            t0 = time.monotonic()
+            n_nodes, n_rels = push_documents_to_neo4j(
+                documents, graph,
+                gemini_model=gemini_model,
+                max_workers=context_workers,
+            )
+            print(f"  [Step 4] Neo4j graph upsert     : {time.monotonic() - t0:6.1f}s  ({n_nodes} node(s), {n_rels} relationship(s))")
+
+            pdf_elapsed = time.monotonic() - pdf_start
             total_chunks += len(ids)
-            print(f"    ✓ {len(ids)} chunk(s) upserted for {pdf_path.name}")
+            total_nodes  += n_nodes
+            total_rels   += n_rels
+            print(
+                f"\n  ✅ SUCCESS — '{pdf_path.name}' fully ingested in {pdf_elapsed:.1f}s\n"
+                f"     Qdrant : {len(ids)} chunk(s) upserted\n"
+                f"     Neo4j  : {n_nodes} node(s) + {n_rels} relationship(s) upserted"
+            )
+            log_file.write(
+                f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] SUCCESS  "
+                f"{pdf_path.name}  |  "
+                f"{pdf_elapsed:.1f}s  |  "
+                f"Qdrant: {len(ids)} chunk(s)  |  "
+                f"Neo4j: {n_nodes} node(s) + {n_rels} rel(s)\n"
+            )
+            log_file.flush()
 
         except Exception:
             failed.append(str(pdf_path))
             print(f"  [ERROR] Failed to process {pdf_path.name}:")
             traceback.print_exc()
+            log_file.write(
+                f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] FAILED   "
+                f"{pdf_path.name}\n"
+            )
+            log_file.flush()
+
+    graph.close()
+
+    summary = (
+        f"\nRun finished: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}  |  "
+        f"{len(pdf_paths) - len(failed)}/{len(pdf_paths)} succeeded  |  "
+        f"Chunks: {total_chunks}  |  Nodes: {total_nodes}  |  Edges: {total_rels}\n"
+    )
+    log_file.write(summary)
+    log_file.close()
+    print(f"  Log written to: {log_path.resolve()}")
 
     print(f"\n{'=' * 70}")
     print(f"  Finished  |  {len(pdf_paths) - len(failed)}/{len(pdf_paths)} PDF(s) succeeded")
-    print(f"  Total chunks upserted : {total_chunks}")
+    print(f"  Chunks upserted (Qdrant) : {total_chunks}")
+    print(f"  Nodes upserted  (Neo4j)  : {total_nodes}")
+    print(f"  Edges upserted  (Neo4j)  : {total_rels}")
     if failed:
         print(f"  Failed files:")
         for f in failed:
