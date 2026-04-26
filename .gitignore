@@ -1,0 +1,16 @@
+.env
+.venv
+venv
+__pycache__/
+*.pyc
+*.pdf
+*.DS_Store
+.pytest_cache/
+.mypy_cache/
+# PDFs and pipeline outputs (keep dirs via .gitkeep)
+data_pipeline/data/pdfs/*
+!data_pipeline/data/pdfs/.gitkeep
+data_pipeline/data/processed/*
+!data_pipeline/data/processed/.gitkeep
+backend/data/
+*.log
