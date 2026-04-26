@@ -30,7 +30,7 @@ class SearchResponse(BaseModel):
 
 
 class AgentChatRequest(BaseModel):
-    message: str = Field(..., description="User message to send to the dummy agent.")
+    message: str = Field(..., description="User message to send to the main agent.")
 
 
 class AgentToolCall(BaseModel):

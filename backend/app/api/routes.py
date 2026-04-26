@@ -70,18 +70,18 @@ def nerc_vector_search(req: SearchRequest) -> SearchResponse:
     return SearchResponse(query=req.query, chunks=chunks)
 
 
-@router.post("/agent/dummy", response_model=AgentChatResponse, tags=["agent"])
-def agent_dummy_chat(req: AgentChatRequest) -> AgentChatResponse:
-    """Smoke-test endpoint for a dummy LangChain agent backed by Gemini.
+@router.post("/agent/main", response_model=AgentChatResponse, tags=["agent"])
+def agent_main_chat(req: AgentChatRequest) -> AgentChatResponse:
+    """Smoke-test endpoint for the main LangChain agent backed by Gemini.
 
     Sends ``req.message`` to a minimal ``create_agent`` agent that has a single
     in-process ``get_current_time`` tool. Returns the agent's final reply and
     any tool calls it made along the way.
     """
-    from app.agents.main_agent import get_dummy_agent
+    from app.agents.main_agent import get_main_agent
 
     try:
-        agent = get_dummy_agent()
+        agent = get_main_agent()
         result = agent.invoke(
             {"messages": [{"role": "user", "content": req.message}]}
         )

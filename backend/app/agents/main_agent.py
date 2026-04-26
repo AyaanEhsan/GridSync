@@ -1,4 +1,4 @@
-"""Dummy LangChain agent used to smoke-test the agentic endpoint plumbing.
+"""Main LangChain agent used to smoke-test the agentic endpoint plumbing.
 
 Uses LangChain 1.0's unified ``create_agent`` API with the Gemini chat model
 configured via ``GEMINI_MODEL`` / ``GEMINI_API_KEY`` in the project ``.env``.
@@ -24,15 +24,15 @@ def get_current_time() -> str:
 
 
 SYSTEM_PROMPT = (
-    "You are a friendly dummy GridSync agent used purely for smoke-testing "
+    "You are a friendly GridSync agent used purely for smoke-testing "
     "the agentic endpoint. If the user asks for the current time or date, "
     "call the get_current_time tool. Otherwise, answer briefly in plain text."
 )
 
 
 @lru_cache(maxsize=1)
-def get_dummy_agent():
-    """Build (and cache) the dummy agent.
+def get_main_agent():
+    """Build (and cache) the main agent.
 
     Raises ``RuntimeError`` if ``GEMINI_API_KEY`` is missing so the failure
     surfaces clearly through the FastAPI handler instead of at import time.
