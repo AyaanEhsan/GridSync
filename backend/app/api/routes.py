@@ -78,7 +78,7 @@ def agent_dummy_chat(req: AgentChatRequest) -> AgentChatResponse:
     in-process ``get_current_time`` tool. Returns the agent's final reply and
     any tool calls it made along the way.
     """
-    from app.agents.dummy_agent import get_dummy_agent
+    from app.agents.main_agent import get_dummy_agent
 
     try:
         agent = get_dummy_agent()

@@ -77,7 +77,6 @@ def _cohere_rerank(
     )
     return [(r.index, float(r.relevance_score)) for r in resp.results]
 
-
 def hybrid_search(
     store: QdrantStore,
     dense_embedder: DenseEmbedder,
