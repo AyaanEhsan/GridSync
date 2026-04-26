@@ -1,6 +1,9 @@
+import json
 from functools import lru_cache
+from typing import Any, AsyncIterator
 
 from fastapi import APIRouter, HTTPException
+from fastapi.responses import StreamingResponse
 
 from app.api.schemas import (
     AgentChatRequest,
@@ -118,3 +121,48 @@ def agent_main_chat(req: AgentChatRequest) -> AgentChatResponse:
             )
 
     return AgentChatResponse(reply=reply, tool_calls=tool_calls)
+
+
+def _format_sse(event_type: str, payload: dict[str, Any]) -> str:
+    """Serialise an event as a single SSE record.
+
+    SSE wire format is ``event: <type>\\ndata: <json>\\n\\n``. ``json.dumps`` is
+    called with ``default=str`` so that non-JSON-native values surfacing from
+    tool args/outputs (datetimes, Pydantic models, etc.) don't blow up the stream.
+    """
+    data = json.dumps(payload, default=str, ensure_ascii=False)
+    return f"event: {event_type}\ndata: {data}\n\n"
+
+
+@router.post("/agent/main/stream", tags=["agent"])
+async def agent_main_chat_stream(req: AgentChatRequest) -> StreamingResponse:
+    """SSE variant of ``/agent/main``: streams tokens, tool calls, and tool results.
+
+    The response is ``text/event-stream`` with these named events:
+
+    - ``token``: ``{"text": "..."}`` -- one LLM text delta
+    - ``tool_call``: ``{"name": "...", "args": {...}}`` -- a tool is about to run
+    - ``tool_result``: ``{"name": "...", "output": "..."}`` -- tool finished
+    - ``done``: ``{}`` -- stream finished cleanly
+    - ``error``: ``{"detail": "..."}`` -- something went wrong; stream then closes
+    """
+    from app.agents.main_agent import stream_main_agent
+
+    async def event_source() -> AsyncIterator[str]:
+        try:
+            async for evt in stream_main_agent(req.message):
+                event_type = evt.pop("type", "message")
+                yield _format_sse(event_type, evt)
+        except Exception as exc:
+            yield _format_sse("error", {"detail": f"agent failed: {exc}"})
+
+    return StreamingResponse(
+        event_source(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            # Disable proxy buffering (e.g. nginx) so events flush immediately.
+            "X-Accel-Buffering": "no",
+        },
+    )
