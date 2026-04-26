@@ -19,6 +19,7 @@ class Chunk(BaseModel):
     score: float
     dense_score: Optional[float] = None
     sparse_score: Optional[float] = None
+    rerank_score: float
     text: Optional[str] = None
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
@@ -26,3 +27,17 @@ class Chunk(BaseModel):
 class SearchResponse(BaseModel):
     query: str
     chunks: List[Chunk]
+
+
+class AgentChatRequest(BaseModel):
+    message: str = Field(..., description="User message to send to the dummy agent.")
+
+
+class AgentToolCall(BaseModel):
+    name: str
+    args: Dict[str, Any] = Field(default_factory=dict)
+
+
+class AgentChatResponse(BaseModel):
+    reply: str
+    tool_calls: List[AgentToolCall] = Field(default_factory=list)
