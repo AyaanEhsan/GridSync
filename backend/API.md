@@ -77,7 +77,30 @@ When the backend is running locally, you can view the interactive API documentat
   }
   ```
 
-### 4. Main Agent Chat
+### 4. Chunk Graph Relationships
+- **Method:** `GET`
+- **Path:** `/graph/chunks/{file_id}/{chunk_num}/relationships`
+- **Description:** Returns the `(from, rel, to)` triples adjacent to a single `DocumentChunk` node in the Neo4j knowledge graph. Useful for displaying which entities (Events, Locations, Utilities, etc.) a given chunk references.
+- **Path Parameters:**
+  - `file_id` (string, required): Value of the `file_id` property on the chunk node (typically a UUID).
+  - `chunk_num` (string, required): Value of the `chunk_no` property on the chunk node, stored as a string (e.g. `"1"`).
+- **Response:**
+  ```json
+  {
+      "file_id": "abc-123",
+      "chunk_num": "1",
+      "relationships": [
+          {
+              "from_node": ["DocumentChunk"],
+              "relationship": "MENTIONS",
+              "to_node": ["Event"]
+          }
+      ]
+  }
+  ```
+  Returns an empty `relationships` array if the chunk does not exist or has no incident edges.
+
+### 5. Main Agent Chat
 - **Method:** `POST`
 - **Path:** `/agent/main`
 - **Description:** Sends a message to the main LangChain agent (backed by Gemini) and returns the agent's reply along with any tool calls made.
@@ -101,7 +124,7 @@ When the backend is running locally, you can view the interactive API documentat
   }
   ```
 
-### 5. Main Agent Chat (SSE Stream)
+### 6. Main Agent Chat (SSE Stream)
 - **Method:** `POST`
 - **Path:** `/agent/main/stream`
 - **Description:** Same as `/agent/main`, but streams the agent's response as **Server-Sent Events** (`text/event-stream`). Tokens stream live as the LLM emits them, and tool calls/results are surfaced as discrete events.

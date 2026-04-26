@@ -10,6 +10,8 @@ from app.api.schemas import (
     AgentChatResponse,
     AgentToolCall,
     Chunk,
+    ChunkRelationship,
+    ChunkRelationshipsResponse,
     HealthResponse,
     SearchRequest,
     SearchResponse,
@@ -31,6 +33,14 @@ def _get_search_components():
     from gridsync import DenseEmbedder, QdrantStore, SparseEmbedder
 
     return QdrantStore(), DenseEmbedder(), SparseEmbedder()
+
+
+@lru_cache(maxsize=1)
+def _get_neo4j_store():
+    """Lazy-init the Neo4j knowledge-graph store once per process."""
+    from gridsync import Neo4jStore
+
+    return Neo4jStore()
 
 
 @router.post("/nerc-vector-search", response_model=SearchResponse, tags=["rag"])
@@ -71,6 +81,41 @@ def nerc_vector_search(req: SearchRequest) -> SearchResponse:
         )
         
     return SearchResponse(query=req.query, chunks=chunks)
+
+
+@router.get(
+    "/graph/chunks/{file_id}/{chunk_num}/relationships",
+    response_model=ChunkRelationshipsResponse,
+    tags=["graph"],
+)
+def chunk_relationships(file_id: str, chunk_num: str) -> ChunkRelationshipsResponse:
+    """Return the (from, rel, to) triples adjacent to a single ``DocumentChunk``.
+
+    Looks up the ``DocumentChunk`` node identified by ``file_id`` + ``chunk_num``
+    in the Neo4j knowledge graph and returns one entry per incident edge. If the
+    chunk does not exist or has no relationships, ``relationships`` is empty.
+    """
+    try:
+        store = _get_neo4j_store()
+        triples = store.query_based_on_file_id_and_chunk_no(
+            file_id=file_id, chunk_num=chunk_num
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500, detail=f"graph query failed: {exc}"
+        ) from exc
+
+    relationships = [
+        ChunkRelationship(
+            from_node=list(t.get("from_node") or []),
+            relationship=t["relationship"],
+            to_node=list(t.get("to_node") or []),
+        )
+        for t in triples
+    ]
+    return ChunkRelationshipsResponse(
+        file_id=file_id, chunk_num=chunk_num, relationships=relationships
+    )
 
 
 @router.post("/agent/main", response_model=AgentChatResponse, tags=["agent"])

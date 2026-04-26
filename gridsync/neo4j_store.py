@@ -5,8 +5,9 @@ Provides a small, idempotent API for the operations we actually use:
 - :meth:`Neo4jStore.create_node` – upsert a labelled entity by a unique key.
 - :meth:`Neo4jStore.create_relationship` – upsert a directed edge between two
   existing entities.
-- :meth:`Neo4jStore.query` – run an arbitrary Cypher query and return plain
-  dict records.
+- :meth:`Neo4jStore.query_based_on_file_id_and_chunk_no` – fetch the
+  (from, rel, to) triples adjacent to a ``DocumentChunk`` identified by
+  ``file_id`` + ``chunk_num``.
 
 All writes use Cypher ``MERGE`` so re-running ingestion is safe.
 """
@@ -196,28 +197,45 @@ class Neo4jStore:
 
     # ----- reads -----------------------------------------------------------------
 
-    DEFAULT_LIST_QUERY = (
-        "MATCH (a)-[r]->(b) "
-        "RETURN a.name AS from_node, type(r) AS rel, b.name AS to_node "
-        "LIMIT 100"
+    _CHUNK_NEIGHBORS_QUERY = (
+        "MATCH (c:DocumentChunk {file_id: $file_id, chunk_no: $chunk_num}) "
+        "OPTIONAL MATCH path = (c)-[r]-(n) "
+        "RETURN collect({"
+        "from_node: labels(c), "
+        "relationship: type(r), "
+        "to_node: labels(n)"
+        "}) AS node_relation_node"
     )
 
-    def query(
+    def query_based_on_file_id_and_chunk_no(
         self,
-        cypher: str = DEFAULT_LIST_QUERY,
-        **kwargs: Any,
+        file_id: str,
+        chunk_num: str,
     ) -> List[Dict[str, Any]]:
-        """Execute a Cypher query and return records as plain dicts.
+        """Return the relationships adjacent to a single ``DocumentChunk``.
+
+        Looks up the ``DocumentChunk`` node identified by ``file_id`` +
+        ``chunk_num`` and returns one entry per incident edge, each shaped
+        as ``{"from_node": [...labels...], "relationship": "REL_TYPE",
+        "to_node": [...labels...]}``.
 
         Args:
-            cypher: The Cypher query string to execute. Defaults to listing
-                up to 100 ``(from)-[rel]->(to)`` triples by ``name``.
-            **kwargs: Optional parameters spliced into the query as
-                ``$param`` placeholders.
+            file_id: Value of the ``file_id`` property on the chunk node
+                (typically a UUID string).
+            chunk_num: Value of the ``chunk_no`` property on the chunk node
+                (stored as a string in the graph, e.g. ``"1"``).
 
         Returns:
-            A list of dicts, one per record.
+            A list of ``{from_node, relationship, to_node}`` dicts. Empty
+            list if the chunk does not exist or has no relationships.
         """
         with self.driver.session() as session:
-            result = session.run(cypher, **kwargs)
-            return [record.data() for record in result]
+            record = session.run(
+                self._CHUNK_NEIGHBORS_QUERY,
+                file_id=file_id,
+                chunk_num=chunk_num,
+            ).single()
+            if record is None:
+                return []
+            triples = record["node_relation_node"] or []
+            return [t for t in triples if t.get("relationship") is not None]
