@@ -50,19 +50,30 @@ def _get_neo4j_store():
 
 
 def _format_relationships(store: Any, file_id: str, chunk_num: str) -> str:
-    """Render Neo4j triples adjacent to a ``DocumentChunk`` as compact text."""
+    """Render Neo4j triples adjacent to a chunk's entities as compact text.
+
+    Each triple is formatted as ``(Label "name")-[REL]->(Label "name")``
+    when names are available, falling back to just the labels otherwise.
+    """
     try:
         triples = store.query_based_on_file_id_and_chunk_no(
             file_id=file_id, chunk_num=chunk_num
         )
     except Exception:
         return ""
+
+    def _fmt_endpoint(labels: Any, name: Any) -> str:
+        label_str = ",".join(list(labels or [])) or "?"
+        if name:
+            return f'{label_str} "{name}"'
+        return label_str
+
     lines: list[str] = []
     for t in triples or []:
-        from_node = ",".join(list(t.get("from_node") or [])) or "?"
-        to_node = ",".join(list(t.get("to_node") or [])) or "?"
         rel = t.get("relationship") or "?"
-        lines.append(f"({from_node})-[{rel}]->({to_node})")
+        from_str = _fmt_endpoint(t.get("from_node"), t.get("from_name"))
+        to_str = _fmt_endpoint(t.get("to_node"), t.get("to_name"))
+        lines.append(f"({from_str})-[{rel}]->({to_str})")
     return "; ".join(lines)
 
 

@@ -17,12 +17,20 @@ class SearchRequest(BaseModel):
 class ChunkRelationship(BaseModel):
     from_node: List[str] = Field(
         default_factory=list,
-        description="Labels of the source node (the DocumentChunk).",
+        description="Labels of the source entity node, e.g. ['Organization'].",
+    )
+    from_name: Optional[str] = Field(
+        default=None,
+        description="`name` property of the source entity, e.g. 'NERC'.",
     )
     relationship: str = Field(..., description="Relationship type, e.g. MENTIONS.")
     to_node: List[str] = Field(
         default_factory=list,
-        description="Labels of the target node, e.g. ['Event'].",
+        description="Labels of the target entity node, e.g. ['Threat'].",
+    )
+    to_name: Optional[str] = Field(
+        default=None,
+        description="`name` property of the target entity, e.g. 'Attack Scenario'.",
     )
 
 

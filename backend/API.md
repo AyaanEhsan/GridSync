@@ -69,36 +69,50 @@ When the backend is running locally, you can view the interactive API documentat
               "rerank_score": 0.95,
               "text": "The matching text content...",
               "metadata": {
-                  "source": "document.pdf",
-                  "page": 1
-              }
+                  "folder": "ero-reliability-risk-priorities-reports",
+                  "filename": "2019 ERO Reliability Risk Priorities Report.pdf",
+                  "file_id": "a117b247-74bb-40ba-8c81-fc26c77fb50f",
+                  "chunk_no": 15
+              },
+              "relationships": [
+                  {
+                      "from_node": ["Organization"],
+                      "from_name": "NERC",
+                      "relationship": "RECOMMENDED_TO_EVAL",
+                      "to_node": ["Threat"],
+                      "to_name": "Attack Scenario"
+                  }
+              ]
           }
       ]
   }
   ```
+  `relationships` is populated automatically for any chunk whose payload carries both `file_id` and `chunk_no`. Empty array if the chunk's entities have no incident edges in Neo4j.
 
 ### 4. Chunk Graph Relationships
 - **Method:** `GET`
 - **Path:** `/graph/chunks/{file_id}/{chunk_num}/relationships`
-- **Description:** Returns the `(from, rel, to)` triples adjacent to a single `DocumentChunk` node in the Neo4j knowledge graph. Useful for displaying which entities (Events, Locations, Utilities, etc.) a given chunk references.
+- **Description:** Returns the `(from, rel, to)` triples adjacent to entities extracted from a given chunk. Ingestion stores `file_id` + `chunk_no` directly on the entity nodes (e.g. `Organization`, `Threat`, `Section`), so this endpoint returns every directed edge whose source or target was extracted from that chunk.
 - **Path Parameters:**
-  - `file_id` (string, required): Value of the `file_id` property on the chunk node (typically a UUID).
-  - `chunk_num` (string, required): Value of the `chunk_no` property on the chunk node, stored as a string (e.g. `"1"`).
+  - `file_id` (string, required): Value of the `file_id` property on the entity nodes (typically a UUID shared by all entities from the same source PDF).
+  - `chunk_num` (string, required): Value of the `chunk_no` property. Stored as a string in the graph (e.g. `"15"`).
 - **Response:**
   ```json
   {
-      "file_id": "abc-123",
-      "chunk_num": "1",
+      "file_id": "a117b247-74bb-40ba-8c81-fc26c77fb50f",
+      "chunk_num": "15",
       "relationships": [
           {
-              "from_node": ["DocumentChunk"],
-              "relationship": "MENTIONS",
-              "to_node": ["Event"]
+              "from_node": ["Organization"],
+              "from_name": "NERC",
+              "relationship": "RECOMMENDED_TO_EVAL",
+              "to_node": ["Threat"],
+              "to_name": "Attack Scenario"
           }
       ]
   }
   ```
-  Returns an empty `relationships` array if the chunk does not exist or has no incident edges.
+  Returns an empty `relationships` array if no entity for `(file_id, chunk_num)` participates in any relationship.
 
 ### 5. Main Agent Chat
 - **Method:** `POST`

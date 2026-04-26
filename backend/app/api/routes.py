@@ -46,15 +46,17 @@ def _get_neo4j_store():
 def _relationships_for_file_chunk(
     store: Any, file_id: str, chunk_num: str
 ) -> list[ChunkRelationship]:
-    """Triples adjacent to a ``DocumentChunk`` for ``file_id`` + ``chunk_num``."""
+    """Triples adjacent to entities extracted from ``file_id`` + ``chunk_num``."""
     triples = store.query_based_on_file_id_and_chunk_no(
         file_id=file_id, chunk_num=chunk_num
     )
     return [
         ChunkRelationship(
             from_node=list(t.get("from_node") or []),
+            from_name=t.get("from_name"),
             relationship=t["relationship"],
             to_node=list(t.get("to_node") or []),
+            to_name=t.get("to_name"),
         )
         for t in triples
     ]
@@ -98,19 +100,20 @@ def nerc_vector_search(req: SearchRequest) -> SearchResponse:
         )
 
     # After hybrid search + rerank, attach Neo4j edges for chunks that carry
-    # file_id + chunk_no in metadata (from ingestion).
+    # file_id + chunk_no in metadata (from ingestion). `chunk_no` is an int
+    # in Qdrant payloads but a string in the graph, so we coerce to str.
     try:
-        store = _get_neo4j_store()
+        graph = _get_neo4j_store()
     except Exception:
-        store = None
+        graph = None
     for chunk in chunks:
         file_id = chunk.metadata.get("file_id")
         chunk_no = chunk.metadata.get("chunk_no")
-        if not file_id or chunk_no is None or store is None:
+        if not file_id or chunk_no is None or graph is None:
             continue
         try:
             chunk.relationships = _relationships_for_file_chunk(
-                store, str(file_id), str(chunk_no)
+                graph, str(file_id), str(chunk_no)
             )
         except Exception:
             continue

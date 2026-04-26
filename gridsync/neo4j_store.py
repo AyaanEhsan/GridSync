@@ -197,14 +197,21 @@ class Neo4jStore:
 
     # ----- reads -----------------------------------------------------------------
 
+    # Ingestion stores `file_id` + `chunk_no` directly on the entity nodes
+    # (e.g. ``Organization``, ``Threat``, ``Section``); there is no separate
+    # ``DocumentChunk`` node. So "relationships adjacent to a chunk" means:
+    # every directed edge whose source OR target is an entity that was
+    # extracted from that chunk. ``chunk_no`` is stored as a string in the
+    # graph, so callers should pass it as a string too.
     _CHUNK_NEIGHBORS_QUERY = (
-        "MATCH (c:DocumentChunk {file_id: $file_id, chunk_no: $chunk_num}) "
-        "OPTIONAL MATCH path = (c)-[r]-(n) "
-        "RETURN collect({"
-        "from_node: labels(c), "
-        "relationship: type(r), "
-        "to_node: labels(n)"
-        "}) AS node_relation_node"
+        "MATCH (a)-[r]->(b) "
+        "WHERE (a.file_id = $file_id AND a.chunk_no = $chunk_num) "
+        "   OR (b.file_id = $file_id AND b.chunk_no = $chunk_num) "
+        "RETURN labels(a)  AS from_labels, "
+        "       a.name     AS from_name, "
+        "       type(r)    AS relationship, "
+        "       labels(b)  AS to_labels, "
+        "       b.name     AS to_name"
     )
 
     def query_based_on_file_id_and_chunk_no(
@@ -212,30 +219,41 @@ class Neo4jStore:
         file_id: str,
         chunk_num: str,
     ) -> List[Dict[str, Any]]:
-        """Return the relationships adjacent to a single ``DocumentChunk``.
+        """Return the relationships adjacent to entities extracted from a chunk.
 
-        Looks up the ``DocumentChunk`` node identified by ``file_id`` +
-        ``chunk_num`` and returns one entry per incident edge, each shaped
-        as ``{"from_node": [...labels...], "relationship": "REL_TYPE",
-        "to_node": [...labels...]}``.
+        Ingestion writes ``file_id`` + ``chunk_no`` onto each entity node it
+        creates (``Organization``, ``Threat``, ``Section``, ...), not onto a
+        separate ``DocumentChunk`` node. This method returns one entry per
+        directed edge where at least one endpoint was extracted from the
+        given ``(file_id, chunk_num)`` chunk.
 
         Args:
-            file_id: Value of the ``file_id`` property on the chunk node
-                (typically a UUID string).
-            chunk_num: Value of the ``chunk_no`` property on the chunk node
-                (stored as a string in the graph, e.g. ``"1"``).
+            file_id: Value of the ``file_id`` property on the entity nodes
+                (typically a UUID string shared by all entities from the
+                same source PDF).
+            chunk_num: Value of the ``chunk_no`` property. Stored as a
+                string in the graph, e.g. ``"15"``; pass it as a string.
 
         Returns:
-            A list of ``{from_node, relationship, to_node}`` dicts. Empty
-            list if the chunk does not exist or has no relationships.
+            A list of dicts shaped as ``{"from_node": [...labels...],
+            "from_name": "...", "relationship": "REL_TYPE", "to_node":
+            [...labels...], "to_name": "..."}``. Empty list if no entity
+            for ``(file_id, chunk_num)`` participates in any relationship.
         """
         with self.driver.session() as session:
-            record = session.run(
+            records = session.run(
                 self._CHUNK_NEIGHBORS_QUERY,
                 file_id=file_id,
                 chunk_num=chunk_num,
-            ).single()
-            if record is None:
-                return []
-            triples = record["node_relation_node"] or []
-            return [t for t in triples if t.get("relationship") is not None]
+            )
+            return [
+                {
+                    "from_node": list(r["from_labels"] or []),
+                    "from_name": r["from_name"],
+                    "relationship": r["relationship"],
+                    "to_node": list(r["to_labels"] or []),
+                    "to_name": r["to_name"],
+                }
+                for r in records
+                if r["relationship"] is not None
+            ]
