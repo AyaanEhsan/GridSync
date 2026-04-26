@@ -37,8 +37,6 @@ Output schema (one dict per chunk)
 
 from __future__ import annotations
 
-import argparse
-import json
 import os
 import re
 import threading
@@ -218,6 +216,7 @@ Corporation) reliability report. Your task is to write 2-3 sentences that:
   1. Identify the document (report type and approximate year if discernible).
   2. Describe what topic this specific chunk covers and how it fits within the \
 overall document structure.
+3. Please provide enought minimal context to identify the chunk in the document, such that chunk is meaningful on its own.
 
 Output ONLY the context sentences — no bullet points, no labels, no preamble.
 
@@ -385,12 +384,6 @@ def to_vector_db_records(chunks: list[dict]) -> list[dict]:
             "id":   str(uuid.uuid4()),          # unique per chunk
             "text": chunk["content"],            # context prepended → embed this
             "payload": {
-                # ── chunk content ──────────────────────────────────────────
-                "context":  chunk.get("context", ""),
-                "content":  chunk.get("content", ""),
-                "title":    chunk.get("title", ""),
-                "level":    chunk.get("level", 0),
-                # ── file metadata ──────────────────────────────────────────
                 "folder":   meta.get("folder", ""),
                 "filename": meta.get("filename", ""),
                 "file_id":  meta.get("file_id", ""),
@@ -476,58 +469,3 @@ def process_pdf(
     return records
 
 
-# ---------------------------------------------------------------------------
-# CLI entry point
-# ---------------------------------------------------------------------------
-
-def _build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(
-        description="PDF → vector-DB-ready chunks with Gemini context",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
-    )
-    p.add_argument("pdf", help="Path to the input PDF file")
-    p.add_argument("--min-body",    type=int,   default=50,     metavar="N",
-                   help="Min raw chunk body chars to keep")
-    p.add_argument("--min-chars",   type=int,   default=1000,   metavar="N",
-                   help="Min merged chunk body chars")
-    p.add_argument("--max-doc",     type=int,   default=12_000, metavar="N",
-                   help="Max doc chars sent to Gemini")
-    p.add_argument("--workers",     type=int,   default=10,     metavar="N",
-                   help="Parallel Gemini threads")
-    p.add_argument("--model",       type=str,   default=None,
-                   help="Gemini model override (default: GEMINI_MODEL env var)")
-    p.add_argument("--no-context",  action="store_true",
-                   help="Skip Gemini context generation")
-    p.add_argument("--out",         type=str,   default=None,   metavar="FILE",
-                   help="Save output JSON to this file (default: print summary)")
-    return p
-
-
-if __name__ == "__main__":
-    args = _build_parser().parse_args()
-
-    records = process_pdf(
-        args.pdf,
-        min_body_chars=args.min_body,
-        min_chunk_chars=args.min_chars,
-        max_doc_chars=args.max_doc,
-        context_workers=args.workers,
-        gemini_model=args.model,
-        generate_context=not args.no_context,
-    )
-
-    if args.out:
-        out_path = Path(args.out)
-        out_path.write_text(json.dumps(records, indent=2, ensure_ascii=False), encoding="utf-8")
-        print(f"Saved {len(records)} records → {out_path}")
-    else:
-        print(f"\n{'=' * 70}")
-        print(f"  {len(records)} record(s)  |  sample payload keys: {list(records[0]['payload'])}")
-        print(f"{'=' * 70}")
-        for r in records[:3]:
-            p = r["payload"]
-            print(f"\n  id       : {r['id']}")
-            print(f"  chunk_no : {p['chunk_no']}  |  folder : {p['folder']}")
-            print(f"  title    : {p['title']}")
-            print(f"  context  : {p['context'][:120]}{'…' if len(p['context']) > 120 else ''}")
-            print(f"  text     : {r['text'][:200]}{'…' if len(r['text']) > 200 else ''}")
