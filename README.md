@@ -1,4 +1,4 @@
-# GridSync (WATT: The Grid Operator's Co-Pilot)
+# WATT: The Grid Operator's Co-Pilot
 
 ![Grid Monitor](assets/grid_monitor.jpeg)
 
