@@ -1,0 +1,247 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:ital,wght@0,300;0,400;0,500;0,600;1,400&family=IBM+Plex+Sans:ital,wght@0,300;0,400;0,500;0,600;1,400&display=swap');
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* ─── Tailwind v4 theme tokens ─── */
+@theme inline {
+  --color-background: var(--bg-primary);
+  --color-foreground: var(--text-primary);
+  --color-card: var(--bg-secondary);
+  --color-card-foreground: var(--text-primary);
+  --color-popover: var(--bg-elevated);
+  --color-popover-foreground: var(--text-primary);
+  --color-primary: var(--accent-cyan);
+  --color-primary-foreground: var(--bg-primary);
+  --color-secondary: var(--bg-tertiary);
+  --color-secondary-foreground: var(--text-primary);
+  --color-muted: var(--bg-tertiary);
+  --color-muted-foreground: var(--text-muted);
+  --color-accent: var(--bg-elevated);
+  --color-accent-foreground: var(--text-primary);
+  --color-destructive: var(--accent-red);
+  --color-border: var(--border-default);
+  --color-input: var(--border-default);
+  --color-ring: var(--accent-cyan);
+
+  --color-grid-bg: var(--bg-primary);
+  --color-grid-surface: var(--bg-secondary);
+  --color-grid-elevated: var(--bg-elevated);
+  --color-accent-cyan: var(--accent-cyan);
+  --color-accent-green: var(--accent-green);
+  --color-accent-red: var(--accent-red);
+  --color-accent-amber: var(--accent-amber);
+  --color-accent-indigo: var(--accent-indigo);
+
+  --font-sans: 'IBM Plex Sans', var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', var(--font-geist-mono), ui-monospace, monospace;
+
+  --radius: 0.5rem;
+  --radius-sm: calc(var(--radius) * 0.75);
+  --radius-md: var(--radius);
+  --radius-lg: calc(var(--radius) * 1.5);
+  --radius-xl: calc(var(--radius) * 2);
+
+  --animate-pulse-glow: pulse-glow 2s ease-in-out infinite;
+  --animate-status-sweep: status-sweep 3s linear infinite;
+  --animate-alarm-pulse: alarm-pulse 2s ease-in-out infinite;
+  --animate-cursor-blink: cursor-blink 530ms steps(1) infinite;
+  --animate-radar-pulse: radar-pulse 2s ease-out infinite;
+}
+
+/* ─── Dark theme (default) ─── */
+:root {
+  --bg-primary:   #0C0C0E;
+  --bg-secondary: #141416;
+  --bg-tertiary:  #1C1C1F;
+  --bg-elevated:  #242428;
+  --bg-hover:     #2A2A2F;
+
+  --border-subtle:  rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.10);
+  --border-strong:  rgba(255, 255, 255, 0.16);
+
+  --text-primary:   #F4F4F5;
+  --text-secondary: #A1A1AA;
+  --text-muted:     #52525B;
+
+  --accent-cyan:       #38BDF8;  /* sky-400 — live data, charts, readings */
+  --accent-cyan-dim:   rgba(56, 189, 248, 0.14);
+  --accent-green:      #16A34A;  /* green-600 — nominal / safe */
+  --accent-green-dim:  rgba(22, 163, 74, 0.14);
+  --accent-red:        #DC2626;  /* red-600 — critical */
+  --accent-red-dim:    rgba(220, 38, 38, 0.14);
+  --accent-amber:      #D97706;  /* amber-600 — warning + brand accent */
+  --accent-amber-dim:  rgba(217, 119, 6, 0.12);
+  --accent-indigo:     #8B5CF6;  /* violet-500 — AI / co-pilot */
+  --accent-indigo-dim: rgba(139, 92, 246, 0.14);
+
+  --glow-cyan:  0 0 16px rgba(56, 189, 248, 0.18);
+  --glow-red:   0 0 16px rgba(220, 38, 38, 0.22);
+  --glow-green: 0 0 16px rgba(22, 163, 74, 0.18);
+
+  --glass-bg:     rgba(20, 20, 22, 0.88);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --glass-blur:   12px;
+
+  /* shadcn compat */
+  --background: var(--bg-primary);
+  --foreground: var(--text-primary);
+  --card: var(--bg-secondary);
+  --card-foreground: var(--text-primary);
+  --popover: var(--bg-elevated);
+  --popover-foreground: var(--text-primary);
+  --primary: var(--accent-cyan);
+  --primary-foreground: var(--bg-primary);
+  --secondary: var(--bg-tertiary);
+  --secondary-foreground: var(--text-primary);
+  --muted: var(--bg-tertiary);
+  --muted-foreground: var(--text-muted);
+  --accent: var(--bg-elevated);
+  --accent-foreground: var(--text-primary);
+  --destructive: var(--accent-red);
+  --border: var(--border-default);
+  --input: var(--border-default);
+  --ring: var(--accent-cyan);
+}
+
+/* ─── Light theme ─── */
+[data-theme="light"] {
+  --bg-primary:   #FFFFFF;
+  --bg-secondary: #F4F4F5;
+  --bg-tertiary:  #EAEAEC;
+  --bg-elevated:  #E4E4E7;
+  --bg-hover:     #D4D4D8;
+
+  --border-subtle:  rgba(0, 0, 0, 0.05);
+  --border-default: rgba(0, 0, 0, 0.09);
+  --border-strong:  rgba(0, 0, 0, 0.14);
+
+  --text-primary:   #09090B;
+  --text-secondary: #71717A;
+  --text-muted:     #A1A1AA;
+
+  --accent-cyan:       #0284C7;  /* sky-600 — deeper for light bg contrast */
+  --accent-cyan-dim:   rgba(2, 132, 199, 0.12);
+  --accent-green:      #15803D;  /* green-700 */
+  --accent-green-dim:  rgba(21, 128, 61, 0.12);
+  --accent-red:        #B91C1C;  /* red-700 */
+  --accent-red-dim:    rgba(185, 28, 28, 0.12);
+  --accent-amber:      #B45309;  /* amber-700 — warning + brand on light */
+  --accent-amber-dim:  rgba(180, 83, 9, 0.10);
+  --accent-indigo:     #7C3AED;  /* violet-600 — AI on light */
+  --accent-indigo-dim: rgba(124, 58, 237, 0.12);
+
+  --glow-cyan:  none;
+  --glow-red:   none;
+  --glow-green: none;
+
+  --glass-bg:     rgba(248, 248, 250, 0.92);
+  --glass-border: rgba(0, 0, 0, 0.07);
+
+  --background: var(--bg-primary);
+  --foreground: var(--text-primary);
+  --card: var(--bg-secondary);
+  --card-foreground: var(--text-primary);
+  --popover: var(--bg-elevated);
+  --popover-foreground: var(--text-primary);
+  --primary: var(--accent-cyan);
+  --primary-foreground: #FFFFFF;
+  --secondary: var(--bg-tertiary);
+  --secondary-foreground: var(--text-primary);
+  --muted: var(--bg-tertiary);
+  --muted-foreground: var(--text-muted);
+  --accent: var(--bg-elevated);
+  --accent-foreground: var(--text-primary);
+  --destructive: var(--accent-red);
+  --border: var(--border-default);
+  --input: var(--border-default);
+  --ring: var(--accent-cyan);
+}
+
+/* ─── Keyframes ─── */
+@keyframes pulse-glow {
+  0%, 100% { text-shadow: 0 0 6px rgba(56, 189, 248, 0.3); }
+  50%       { text-shadow: 0 0 12px #38BDF8, 0 0 24px rgba(56, 189, 248, 0.15); }
+}
+
+@keyframes status-sweep {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+@keyframes alarm-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.0); }
+  50%       { box-shadow: 0 0 0 4px rgba(220, 38, 38, 0.20); }
+}
+
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0; }
+}
+
+@keyframes radar-pulse {
+  0%   { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(2.5); opacity: 0; }
+}
+
+@keyframes ring-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(220, 38, 38, 0.4); }
+  50%       { box-shadow: 0 0 0 6px rgba(220, 38, 38, 0); }
+}
+
+/* ─── Base ─── */
+@layer base {
+  * { box-sizing: border-box; }
+
+  html { color-scheme: dark; }
+  [data-theme="light"] { color-scheme: light; }
+
+  body {
+    background-color: var(--bg-primary);
+    color: var(--text-primary);
+    font-family: 'IBM Plex Sans', var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+    overflow: hidden;
+    height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--accent-cyan);
+    outline-offset: 2px;
+  }
+
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: var(--border-default);
+    border-radius: 2px;
+  }
+  ::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
+}
+
+/* ─── Utilities ─── */
+@layer utilities {
+  .font-jetbrains { font-family: 'IBM Plex Mono', monospace; }
+
+  .glass-panel {
+    background: var(--glass-bg);
+    backdrop-filter: blur(var(--glass-blur));
+    border: 1px solid var(--glass-border);
+  }
+
+  [data-theme="light"] .glass-panel {
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.06);
+  }
+
+  .animate-pulse-glow   { animation: pulse-glow 2s ease-in-out infinite; }
+  .animate-alarm-pulse  { animation: alarm-pulse 2s ease-in-out infinite; }
+  .animate-cursor-blink { animation: cursor-blink 530ms steps(1) infinite; }
+  .animate-radar-pulse  { animation: radar-pulse 2s ease-out infinite; }
+
+  .min-h-0 { min-height: 0; }
+  .hide-scrollbar::-webkit-scrollbar { display: none; }
+  .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+}
